@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import MovieCard from "@/components/MovieCard";
 import type { TMDBMovie } from "@/lib/tmdb";
 
@@ -13,7 +13,6 @@ export default function SelectableMovieGrid({
   genreMap: Record<number, string>;
   emptyMessage?: string;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const getGenreName = (ids: number[]) => genreMap[ids[0]] ?? "Trending";
 
@@ -30,23 +29,14 @@ export default function SelectableMovieGrid({
   return (
     <div className="mt-6 grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
       {movies.map((movie, idx) => {
-        const handlePosterClick = () => {
-          const params = new URLSearchParams(searchParams.toString());
-          params.set("rec", String(movie.id));
-          router.push(`/?${params.toString()}#recommended`, { scroll: false });
-        };
+        // Preserve q/genre/sort, add rec=ID for recommendations.
+        // Native link (not div onClick) so taps work on mobile without hover/JS.
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("rec", String(movie.id));
+        const recHref = `/?${params.toString()}#recommended`;
         return (
-          <div
-            key={movie.id}
-            className="group relative cursor-pointer"
-            onClick={handlePosterClick}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handlePosterClick();
-            }}
-          >
-            <MovieCard movie={movie} genreName={getGenreName(movie.genre_ids)} index={idx} />
+          <div key={movie.id} className="group relative">
+            <MovieCard movie={movie} genreName={getGenreName(movie.genre_ids)} index={idx} posterHref={recHref} />
             <p className="mt-2 text-center text-xs text-white/30">Click poster to recommend</p>
           </div>
         );

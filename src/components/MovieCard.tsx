@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { posterUrl, type TMDBMovie } from "@/lib/tmdb";
 import DetailsButton from "@/components/DetailsButton";
 import WatchlistButton from "@/components/WatchlistButton";
@@ -24,61 +25,69 @@ export default function MovieCard({
   movie,
   genreName,
   index = 0,
+  posterHref,
 }: {
   movie: TMDBMovie;
   genreName?: string;
   index?: number;
+  posterHref?: string;
 }) {
   const poster = posterUrl(movie.poster_path, "w500");
   const rating = movie.vote_average ? movie.vote_average.toFixed(1) : "—";
   const year = formatYear(movie.release_date);
   const gradient = fallbackGradients[index % fallbackGradients.length];
+  // Native link works on both touch and mouse without JS or hover. Defaults to details page;
+  // recommendation grids pass their own ?rec= href to preserve existing behavior.
+  const href = posterHref ?? `/movie/${movie.id}`;
 
   return (
     <div className="group relative overflow-hidden rounded-[20px] border border-white/[0.07] bg-[#0f0f1e] transition hover:border-white/15 hover:shadow-[0_16px_40px_rgba(0,0,0,0.5)]">
-      {/* poster */}
+      {/* poster - native link so taps work on mobile without hover */}
       <div className={`relative aspect-[3/4] overflow-hidden bg-gradient-to-br ${gradient}`}>
-        {poster ? (
-          <Image
-            src={poster}
-            alt={movie.title}
-            fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-cover transition duration-500 group-hover:scale-[1.04]"
-            unoptimized={false}
-          />
-        ) : (
-          <>
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.18),transparent_55%)]" />
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-              <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-semibold tracking-widest text-white/80 backdrop-blur">
-                {(genreName ?? "CINEMA").toUpperCase()}
+        <Link href={href} aria-label={`View details for ${movie.title}`} className="absolute inset-0 z-0">
+          {poster ? (
+            <Image
+              src={poster}
+              alt={movie.title}
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              className="object-cover transition duration-500 group-hover:scale-[1.04]"
+              unoptimized={false}
+            />
+          ) : (
+            <>
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.18),transparent_55%)]" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+                <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-semibold tracking-widest text-white/80 backdrop-blur">
+                  {(genreName ?? "CINEMA").toUpperCase()}
+                </div>
+                <h3 className="mt-3 max-w-[14ch] text-lg font-bold leading-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
+                  {movie.title}
+                </h3>
+                <p className="mt-1 text-xs font-medium text-white/70">{year}</p>
               </div>
-              <h3 className="mt-3 max-w-[14ch] text-lg font-bold leading-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
-                {movie.title}
-              </h3>
-              <p className="mt-1 text-xs font-medium text-white/70">{year}</p>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </Link>
 
         {/* dark gradient over image for text legibility */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
         {/* top badge */}
-        <div className="absolute right-3 top-3 rounded-full bg-black/55 px-2 py-1 text-xs font-semibold text-white backdrop-blur border border-white/20">
+        <div className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/55 px-2 py-1 text-xs font-semibold text-white backdrop-blur border border-white/20">
           ★ {rating}
         </div>
         {index === 0 && (
-          <div className="absolute left-3 top-3 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide text-black">
+          <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold tracking-wide text-black">
             TOP 10
           </div>
         )}
 
-        {/* hover overlay */}
-        <div className="absolute inset-0 flex translate-y-2 flex-col justify-end bg-gradient-to-t from-black/80 via-black/20 to-transparent p-4 opacity-0 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+        {/* hover overlay - pointer-events-none so it never blocks poster taps on touch devices;
+            only the buttons inside re-enable pointer events */}
+        <div className="pointer-events-none absolute inset-0 flex translate-y-2 flex-col justify-end bg-gradient-to-t from-black/80 via-black/20 to-transparent p-4 opacity-0 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100">
           <p className="mb-3 line-clamp-3 text-xs leading-5 text-white/80">{movie.overview || "No overview available."}</p>
-          <div className="flex gap-2">
+          <div className="pointer-events-auto flex gap-2">
             <DetailsButton id={movie.id} />
             <WatchlistButton movie={movie} variant="card" />
           </div>
@@ -88,7 +97,9 @@ export default function MovieCard({
       {/* footer */}
       <div className="space-y-1.5 bg-[#0f0f1e] p-4">
         <h3 className="truncate text-[15px] font-semibold leading-tight text-white" title={movie.title}>
-          {movie.title}
+          <Link href={href} className="transition hover:text-white/80">
+            {movie.title}
+          </Link>
         </h3>
         <div className="flex items-center justify-between text-xs">
           <span className="truncate pr-2 text-white/50">
