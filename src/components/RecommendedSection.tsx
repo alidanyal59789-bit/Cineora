@@ -116,7 +116,7 @@ export default async function RecommendedSection({ selectedId, selectedTitle, ge
           <RecGrid movies={movies} genreMap={genreMap} />
 
           <p className="mt-6 text-center text-xs text-white/25">
-            Tip: Click any poster to refresh recommendations for that movie. Uses <code className="rounded bg-white/10 px-1.5 py-0.5">/movie/{"{id}"}/recommendations</code> then fallback to{" "}
+            Tip: Use &ldquo;More like this&rdquo; under any poster to refresh recommendations for that movie. Uses <code className="rounded bg-white/10 px-1.5 py-0.5">/movie/{"{id}"}/recommendations</code> then fallback to{" "}
             <code className="rounded bg-white/10 px-1.5 py-0.5">/similar</code> • All fetches server-side, key hidden.
           </p>
         </div>
