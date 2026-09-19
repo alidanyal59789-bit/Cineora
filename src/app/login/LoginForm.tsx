@@ -10,15 +10,19 @@ export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/";
-  const callbackError = searchParams.get("error") === "callback";
+  const urlError = searchParams.get("error");
+  const initialError =
+    urlError === "callback"
+      ? "Sign-in callback failed. Please try again."
+      : urlError === "config"
+        ? "Authentication is not configured on this deployment. Please try again later."
+        : null;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
-  const [error, setError] = useState<string | null>(
-    callbackError ? "Sign-in callback failed. Please try again." : null
-  );
+  const [error, setError] = useState<string | null>(initialError);
 
   const configured = isSupabaseConfigured();
 

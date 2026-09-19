@@ -1,8 +1,16 @@
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function proxy(request: NextRequest) {
-  return await updateSession(request);
+  // Proxy must never throw a 500 for the whole site - fall back to
+  // a plain pass-through (guest mode) on any session-refresh failure.
+  try {
+    return await updateSession(request);
+  } catch {
+    return NextResponse.next({
+      request,
+    });
+  }
 }
 
 export const config = {

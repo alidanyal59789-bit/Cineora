@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,6 +19,8 @@ const navLinks = [
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const { count } = useWatchlist();
   const { user } = useUser();
   const router = useRouter();
@@ -28,12 +30,38 @@ export default function Navbar() {
     user?.user_metadata?.name?.charAt(0)?.toUpperCase() ??
     "A";
 
+  const displayName =
+    user?.user_metadata?.full_name ??
+    user?.user_metadata?.name ??
+    user?.email?.split("@")[0] ??
+    "Account";
+
+  // Close the account dropdown on outside click or Escape.
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setUserMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [userMenuOpen]);
+
   async function handleSignOut() {
     if (!isSupabaseConfigured()) return;
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
     } catch {}
+    setUserMenuOpen(false);
     setMobileOpen(false);
     router.refresh();
   }
@@ -111,14 +139,7 @@ export default function Navbar() {
             )}
           </Link>
 
-          {user ? (
-            <button
-              onClick={handleSignOut}
-              className="hidden h-9 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black transition hover:bg-white/90 sm:inline-flex"
-            >
-              Sign Out
-            </button>
-          ) : (
+          {!user && (
             <Link
               href="/login"
               className="hidden h-9 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black transition hover:bg-white/90 sm:inline-flex"
@@ -127,11 +148,71 @@ export default function Navbar() {
             </Link>
           )}
 
-          <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#ec4899] to-[#8b5cf6] p-[1.5px] sm:flex" title={user?.email ?? "Guest"}>
-            <div className="flex h-full w-full items-center justify-center rounded-full bg-[#1a1a2e] text-xs font-bold text-white">
-              {avatarInitial}
+          {user ? (
+            <div className="relative flex" ref={menuRef}>
+              <button
+                onClick={() => setUserMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={userMenuOpen}
+                aria-label="Account menu"
+                title={user.email ?? "Account"}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#ec4899] to-[#8b5cf6] p-[1.5px]"
+              >
+                <span className="flex h-full w-full items-center justify-center rounded-full bg-[#1a1a2e] text-xs font-bold text-white">
+                  {avatarInitial}
+                </span>
+              </button>
+
+              {userMenuOpen && (
+                <div
+                  role="menu"
+                  aria-label="Account"
+                  className="absolute right-0 top-11 z-50 w-60 overflow-hidden rounded-2xl border border-white/10 bg-[#0c0c1a] shadow-2xl shadow-black/50"
+                >
+                  <div className="border-b border-white/[0.07] px-4 py-3">
+                    <p className="truncate text-sm font-semibold text-white">{displayName}</p>
+                    {user.email && (
+                      <p className="truncate text-xs text-white/50">{user.email}</p>
+                    )}
+                  </div>
+                  <nav className="flex flex-col gap-0.5 p-1.5">
+                    <Link
+                      href="/watchlist"
+                      role="menuitem"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="rounded-xl px-3 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/[0.06] hover:text-white"
+                    >
+                      My Watchlist
+                    </Link>
+                    <Link
+                      href="/collections"
+                      role="menuitem"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="rounded-xl px-3 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/[0.06] hover:text-white"
+                    >
+                      My Collections
+                    </Link>
+                    <button
+                      role="menuitem"
+                      onClick={handleSignOut}
+                      className="rounded-xl px-3 py-2.5 text-left text-sm font-medium text-white/70 transition hover:bg-red-500/10 hover:text-red-200"
+                    >
+                      Sign Out
+                    </button>
+                  </nav>
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            <div
+              className="hidden h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#ec4899] to-[#8b5cf6] p-[1.5px] sm:flex"
+              title="Guest"
+            >
+              <div className="flex h-full w-full items-center justify-center rounded-full bg-[#1a1a2e] text-xs font-bold text-white">
+                {avatarInitial}
+              </div>
+            </div>
+          )}
 
           {/* Mobile toggle */}
           <button
@@ -179,7 +260,7 @@ export default function Navbar() {
                 onClick={handleSignOut}
                 className="mt-3 flex h-11 items-center justify-center rounded-full bg-white text-sm font-semibold text-black"
               >
-                Sign Out{user.email ? ` (${user.email})` : ""}
+                Sign Out
               </button>
             ) : (
               <Link
