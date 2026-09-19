@@ -8,11 +8,12 @@ type Props = {
   className?: string;
   placeholder?: string;
   autoFocus?: boolean;
+  onSubmitted?: () => void;
 };
 
 // SearchInput = controlled input that syncs with URL ?q=
 // Hinglish: user jo type karta hai, wo URL me ?q=... ban ke server tak jata hai
-export default function SearchInput({ className, placeholder = "Search movies...", autoFocus }: Props) {
+export default function SearchInput({ className, placeholder = "Search movies...", autoFocus, onSubmitted }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initial = searchParams.get("q") ?? "";
@@ -45,6 +46,7 @@ export default function SearchInput({ className, placeholder = "Search movies...
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     pushQuery(value);
+    onSubmitted?.();
   };
 
   const handleClear = () => {
@@ -65,7 +67,14 @@ export default function SearchInput({ className, placeholder = "Search movies...
             onChange={(e) => setValue(e.target.value)}
             placeholder={placeholder}
             autoFocus={autoFocus}
-            className="w-full bg-transparent text-sm text-white placeholder:text-white/40 focus:outline-none"
+            type="search"
+            name="q"
+            enterKeyHint="search"
+            inputMode="search"
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            className="w-full min-w-0 bg-transparent text-[16px] text-white placeholder:text-white/40 focus:outline-none sm:text-sm"
             aria-label="Search movies"
           />
           {value && (
@@ -79,11 +88,11 @@ export default function SearchInput({ className, placeholder = "Search movies...
             </button>
           )}
         </div>
-        {/* Hidden submit keeps Enter key working; visible on desktop as icon */}
+        {/* Visible submit on all breakpoints so mobile has a tappable target (was sm+ only) */}
         <button
           type="submit"
           aria-label="Search"
-          className="hidden h-7 w-7 items-center justify-center rounded-full bg-white text-black hover:bg-white/90 sm:inline-flex"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-black hover:bg-white/90"
         >
           {isPending ? (
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-black/20 border-t-black" />
@@ -94,10 +103,6 @@ export default function SearchInput({ className, placeholder = "Search movies...
           )}
         </button>
       </div>
-      {/* Enter button for mobile - inside form */}
-      <button type="submit" className="sr-only">
-        Search
-      </button>
     </form>
   );
 }

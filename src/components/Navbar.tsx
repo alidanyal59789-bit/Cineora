@@ -72,6 +72,8 @@ export default function Navbar() {
 
           <button
             aria-label="Search"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((v) => !v)}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white md:hidden"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -143,7 +145,7 @@ export default function Navbar() {
             ))}
             <div className="mt-3 flex gap-2">
               <div className="flex flex-1 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2.5">
-                <SearchInput className="w-full" placeholder="Search movies..." />
+                <SearchInput className="w-full" placeholder="Search movies..." onSubmitted={() => setMobileOpen(false)} />
               </div>
             </div>
             <button className="mt-3 flex h-11 items-center justify-center rounded-full bg-white text-sm font-semibold text-black">
