@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import SearchInput from "@/components/SearchInput";
 import { useWatchlist } from "@/hooks/useWatchlist";
@@ -22,27 +23,19 @@ export default function Navbar() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#ec4899]/40 to-transparent" />
       <div className="mx-auto flex h-[68px] max-w-[1280px] items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <a href="#" className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#ec4899] to-[#8b5cf6] shadow-[0_0_20px_rgba(236,72,153,0.4)]">
-            {/* film/clapper icon */}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M7 4V20M17 4V20M3 8H21M3 16H21M3 4H21V20H3V4Z"
-                stroke="white"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="12" cy="12" r="2.5" fill="white" />
-            </svg>
-          </div>
-          <span className="text-[22px] font-bold tracking-tight">
-            Cine<span className="bg-gradient-to-r from-[#ec4899] to-[#8b5cf6] bg-clip-text text-transparent">ora</span>
-          </span>
+        <Link href="/" className="flex items-center gap-3" aria-label="Cineora home">
+          <Image
+            src="/cineora-logo.png"
+            alt="Cineora"
+            width={40}
+            height={40}
+            priority
+            className="h-9 w-9 rounded-lg object-contain sm:h-10 sm:w-10"
+          />
           <span className="hidden rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[10px] font-semibold tracking-widest text-white/60 sm:inline-flex">
             PREMIUM
           </span>
-        </a>
+        </Link>
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-7 lg:flex">
