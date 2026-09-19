@@ -6,7 +6,9 @@ import Footer from "@/components/Footer";
 import MoodMovieGrid from "@/components/MoodMovieGrid";
 import DetailsTrailer from "@/components/DetailsTrailer";
 import WatchProviders from "@/components/WatchProviders";
-import { getMovieDetails, getRecommendedMovies, getGenreMap, posterUrl, backdropUrl, getMovieVideos, findTrailer, getWatchProviders } from "@/lib/tmdb";
+import CastCrew from "@/components/CastCrew";
+import AddToCollectionButton from "@/components/AddToCollectionButton";
+import { getMovieDetails, getRecommendedMovies, getGenreMap, posterUrl, backdropUrl, getMovieVideos, findTrailer, getWatchProviders, getMovieCredits } from "@/lib/tmdb";
 
 export const revalidate = 3600;
 
@@ -29,6 +31,8 @@ export default async function MovieDetails({ params }: { params: Params }) {
   let watchProvidersInitial: Awaited<ReturnType<typeof getWatchProviders>>["results"][string] | null = null;
   let watchLink: string | null = null;
   let watchError: string | null = null;
+  let credits: Awaited<ReturnType<typeof getMovieCredits>> | null = null;
+  let creditsError: string | null = null;
   let error: string | null = null;
 
   try {
@@ -55,10 +59,11 @@ export default async function MovieDetails({ params }: { params: Params }) {
 
     // Optional sections in parallel - one slow endpoint must not block others
     // Each has its own short timeout; failures become empty/error states, never blank page
-    const [recRes, vidRes, provRes] = await Promise.allSettled([
+    const [recRes, vidRes, provRes, credRes] = await Promise.allSettled([
       Promise.race([getRecommendedMovies(movieId), timeout(8000, "Recommendations timeout")]),
       Promise.race([getMovieVideos(movieId), timeout(8000, "Trailer timeout")]),
       Promise.race([getWatchProviders(movieId), timeout(8000, "Providers timeout")]),
+      Promise.race([getMovieCredits(movieId), timeout(8000, "Credits timeout")]),
     ]);
 
     if (recRes.status === "fulfilled") {
@@ -98,6 +103,16 @@ export default async function MovieDetails({ params }: { params: Params }) {
       } else {
         console.error(`[Details] providers fetch failed for ${movieId}: ${msg.slice(0,150)}`);
         watchError = msg.includes("HTTP 401") || msg.includes("HTTP 403") ? "Providers unavailable (auth)" : msg.includes("timeout") ? "Providers loading timeout" : "Network error loading providers";
+      }
+    }
+
+    if (credRes.status === "fulfilled") {
+      credits = credRes.value as Awaited<ReturnType<typeof getMovieCredits>>;
+    } else {
+      const msg = String((credRes as PromiseRejectedResult).reason);
+      if (!msg.includes("HTTP 404")) {
+        console.warn(`[Details] credits failed for ${movieId}:`, msg.slice(0, 150));
+        creditsError = msg.includes("HTTP 401") || msg.includes("HTTP 403") ? "Cast & crew unavailable (auth)" : msg.includes("timeout") ? "Cast & crew loading timeout" : "Network error loading cast & crew";
       }
     }
     // Fallback if TMDB has no recommendations/similar for this title (single cheap call only)
@@ -180,10 +195,11 @@ export default async function MovieDetails({ params }: { params: Params }) {
                   ))}
                 </div>
                 <p className="mt-6 max-w-[60ch] text-sm leading-6 text-white/70">{details.overview || "No overview available."}</p>
-                <div className="mt-6 flex gap-3">
+                <div className="mt-6 flex flex-wrap gap-3">
                   <a href="#recommendations" className="rounded-full bg-gradient-to-r from-[#ec4899] to-[#8b5cf6] px-6 py-2.5 text-sm font-semibold text-white">
                     Show recommendations
                   </a>
+                  <AddToCollectionButton movie={details} variant="details" />
                   <Link href={`/?rec=${details.id}#recommended`} className="rounded-full border border-white/15 bg-white/[0.06] px-6 py-2.5 text-sm font-semibold text-white">
                     Show on homepage
                   </Link>
@@ -233,6 +249,16 @@ export default async function MovieDetails({ params }: { params: Params }) {
             </div>
           </div>
           <p className="mt-4 text-center text-xs text-white/25">Trailer and OTT use real TMDB data • Availability varies, may need subscription • No hardcode</p>
+        </section>
+
+        {/* Cast & Crew */}
+        <section className="mx-auto max-w-[1280px] px-4 py-10 sm:px-6 lg:px-8">
+          <div className="mb-4 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-[#ec4899] shadow-[0_0_8px_rgba(236,72,153,0.6)]" />
+            <h2 className="text-lg font-bold">Cast &amp; Crew</h2>
+            <span className="ml-auto text-xs text-white/30">TMDB credits</span>
+          </div>
+          <CastCrew credits={credits} error={creditsError} />
         </section>
 
         {/* Recommendations */}

@@ -9,6 +9,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   fetchCollections,
   createCollectionRemote,
+  renameCollectionRemote,
   deleteCollectionRemote,
   addToCollectionRemote,
   removeFromCollectionRemote,
@@ -17,6 +18,7 @@ import {
 export type UserCollection = {
   id: string;
   name: string;
+  description: string;
   movies: TMDBMovie[];
   createdAt: string;
 };
@@ -38,7 +40,13 @@ function loadCollections(): UserCollection[] {
         "name" in (c as Record<string, unknown>) &&
         "movies" in (c as Record<string, unknown>) &&
         Array.isArray((c as { movies: unknown }).movies)
-    ) as UserCollection[];
+    ).map((c) => ({
+      ...(c as UserCollection),
+      description:
+        typeof (c as { description?: unknown }).description === "string"
+          ? (c as { description: string }).description
+          : "",
+    })) as UserCollection[];
   } catch {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -115,13 +123,14 @@ export function useCollections() {
   }, []);
 
   const createCollection = useCallback(
-    (name: string) => {
+    (name: string, description = "") => {
       const trimmed = name.trim();
       if (!trimmed) return null;
       const tempId = `col_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const newCol: UserCollection = {
         id: tempId,
         name: trimmed,
+        description: description.trim(),
         movies: [],
         createdAt: new Date().toISOString(),
       };
@@ -134,7 +143,7 @@ export function useCollections() {
         (async () => {
           try {
             const supabase = createClient();
-            const remoteId = await createCollectionRemote(supabase, userId, trimmed);
+            const remoteId = await createCollectionRemote(supabase, userId, trimmed, description.trim());
             if (remoteId) {
               setCollections((prev) => {
                 const next = prev.map((c) =>
@@ -151,6 +160,102 @@ export function useCollections() {
     },
     [userId]
   );
+
+  // Remote-first create with real success/error feedback for signed-in UI.
+  const createCollectionAsync = useCallback(
+    async (
+      name: string,
+      description = ""
+    ): Promise<{ ok: boolean; error?: string; id?: string }> => {
+      const trimmed = name.trim();
+      if (!trimmed) return { ok: false, error: "Please enter a collection name." };
+      if (!userId || !isSupabaseConfigured()) {
+        return { ok: false, error: "Please sign in to create collections." };
+      }
+      try {
+        const supabase = createClient();
+        const remoteId = await createCollectionRemote(supabase, userId, trimmed, description.trim());
+        if (!remoteId) return { ok: false, error: "Could not save the collection. Please try again." };
+        const refreshed = await fetchCollections(supabase, userId);
+        if (refreshed !== null) {
+          setCollections(refreshed);
+          saveCollections(refreshed);
+        }
+        return { ok: true, id: remoteId };
+      } catch {
+        return { ok: false, error: "Could not save the collection. Please try again." };
+      }
+    },
+    [userId]
+  );
+
+  const renameCollection = useCallback(
+    (id: string, name: string, description = "") => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const descTrimmed = description.trim();
+      setCollections((prev) => {
+        const next = prev.map((c) =>
+          c.id === id ? { ...c, name: trimmed, description: descTrimmed } : c
+        );
+        saveCollections(next);
+        return next;
+      });
+      if (userId && isSupabaseConfigured() && !id.startsWith("col_")) {
+        (async () => {
+          try {
+            await renameCollectionRemote(createClient(), id, trimmed, descTrimmed);
+          } catch {}
+        })();
+      }
+    },
+    [userId]
+  );
+
+  // Remote-first rename with real success/error feedback for signed-in UI.
+  const renameCollectionAsync = useCallback(
+    async (
+      id: string,
+      name: string,
+      description = ""
+    ): Promise<{ ok: boolean; error?: string }> => {
+      const trimmed = name.trim();
+      if (!trimmed) return { ok: false, error: "Please enter a collection name." };
+      if (!userId || !isSupabaseConfigured() || id.startsWith("col_")) {
+        renameCollection(id, trimmed, description);
+        return { ok: true };
+      }
+      try {
+        const ok = await renameCollectionRemote(createClient(), id, trimmed, description.trim());
+        if (!ok) return { ok: false, error: "Could not rename the collection. Please try again." };
+        setCollections((prev) => {
+          const next = prev.map((c) =>
+            c.id === id ? { ...c, name: trimmed, description: description.trim() } : c
+          );
+          saveCollections(next);
+          return next;
+        });
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Could not rename the collection. Please try again." };
+      }
+    },
+    [userId, renameCollection]
+  );
+
+  const refreshCollections = useCallback(async () => {
+    if (!userId || !isSupabaseConfigured()) {
+      setCollections(loadCollections());
+      return;
+    }
+    try {
+      const remote = await fetchCollections(createClient(), userId);
+      if (remote !== null) {
+        setCollections(remote);
+        saveCollections(remote);
+      }
+    } catch {}
+  }, [userId]);
 
   const deleteCollection = useCallback(
     (id: string) => {
@@ -218,7 +323,12 @@ export function useCollections() {
   return {
     collections,
     isLoaded,
+    user,
     createCollection,
+    createCollectionAsync,
+    renameCollection,
+    renameCollectionAsync,
+    refreshCollections,
     deleteCollection,
     addToCollection,
     removeFromCollection,

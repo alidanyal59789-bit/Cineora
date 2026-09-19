@@ -603,8 +603,41 @@ export async function getWatchProviders(movieId: number): Promise<WatchProviders
   return data;
 }
 
+// Credits types - TMDB /movie/{id}/credits
+export type TMDBCastMember = {
+  id: number;
+  name: string;
+  character: string;
+  profile_path: string | null;
+  order: number;
+};
+
+export type TMDBCrewMember = {
+  id: number;
+  name: string;
+  job: string;
+  department: string;
+  profile_path: string | null;
+};
+
+export type TMDBCredits = {
+  id: number;
+  cast: TMDBCastMember[];
+  crew: TMDBCrewMember[];
+};
+
+export async function getMovieCredits(movieId: number): Promise<TMDBCredits> {
+  const data = (await tmdbFetch(`/movie/${movieId}/credits?language=en-US`)) as TMDBCredits;
+  return { id: data.id, cast: data.cast ?? [], crew: data.crew ?? [] };
+}
+
 // Image helpers - TMDB stores only path, we prepend base.
-export function posterUrl(path: string | null, size: "w500" | "w780" | "original" = "w500"): string | null {
+export function profileUrl(path: string | null, size: "w185" | "h632" | "original" = "w185"): string | null {
+  if (!path) return null;
+  return `${IMAGE_BASE}/${size}${path}`;
+}
+
+export function posterUrl(path: string | null, size: "w185" | "w342" | "w500" | "w780" | "original" = "w500"): string | null {
   if (!path) return null;
   return `${IMAGE_BASE}/${size}${path}`;
 }

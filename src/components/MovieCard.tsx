@@ -5,6 +5,7 @@ import Link from "next/link";
 import { posterUrl, type TMDBMovie } from "@/lib/tmdb";
 import DetailsButton from "@/components/DetailsButton";
 import WatchlistButton from "@/components/WatchlistButton";
+import AddToCollectionButton from "@/components/AddToCollectionButton";
 
 // Fallback gradient when poster is missing - keeps premium look
 const fallbackGradients = [
@@ -90,6 +91,7 @@ export default function MovieCard({
           <div className="pointer-events-auto flex gap-2">
             <DetailsButton id={movie.id} />
             <WatchlistButton movie={movie} variant="card" />
+            <AddToCollectionButton movie={movie} />
           </div>
         </div>
       </div>

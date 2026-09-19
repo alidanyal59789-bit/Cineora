@@ -5,6 +5,7 @@ import type { UserCollection } from "@/hooks/useCollections";
 type CollectionRow = {
   id: string;
   name: string;
+  description?: string | null;
   created_at: string;
 };
 
@@ -22,18 +23,47 @@ function isValidMovie(m: unknown): m is TMDBMovie {
   );
 }
 
+function mentionsDescription(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? "");
+  return msg.toLowerCase().includes("description");
+}
+
+function toCollection(row: CollectionRow, movies: TMDBMovie[]): UserCollection {
+  return {
+    id: row.id,
+    name: row.name,
+    description: typeof row.description === "string" ? row.description : "",
+    createdAt: row.created_at,
+    movies,
+  };
+}
+
 export async function fetchCollections(
   supabase: SupabaseClient,
   userId: string
 ): Promise<UserCollection[] | null> {
   try {
-    const { data: cols, error: colError } = await supabase
+    // Prefer the description column (migration 0002); fall back gracefully
+    // if it has not been applied yet.
+    let cols: CollectionRow[] | null = null;
+    const first = await supabase
       .from("collections")
-      .select("id,name,created_at")
+      .select("id,name,description,created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: true });
-    if (colError) return null;
-    const rows = (cols ?? []) as CollectionRow[];
+    if (first.error) {
+      if (!mentionsDescription(first.error)) return null;
+      const fallback = await supabase
+        .from("collections")
+        .select("id,name,created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+      if (fallback.error) return null;
+      cols = (fallback.data ?? []) as CollectionRow[];
+    } else {
+      cols = (first.data ?? []) as CollectionRow[];
+    }
+    const rows = cols ?? [];
     if (rows.length === 0) return [];
     const { data: items, error: itemError } = await supabase
       .from("collection_items")
@@ -51,12 +81,7 @@ export async function fetchCollections(
       if (!list.some((m) => m.id === movie.id)) list.push(movie);
       byCollection.set(row.collection_id, list);
     }
-    return rows.map((c) => ({
-      id: c.id,
-      name: c.name,
-      createdAt: c.created_at,
-      movies: byCollection.get(c.id) ?? [],
-    }));
+    return rows.map((c) => toCollection(c, byCollection.get(c.id) ?? []));
   } catch {
     return null;
   }
@@ -65,18 +90,50 @@ export async function fetchCollections(
 export async function createCollectionRemote(
   supabase: SupabaseClient,
   userId: string,
-  name: string
+  name: string,
+  description = ""
 ): Promise<string | null> {
   try {
-    const { data, error } = await supabase
+    const payload = { user_id: userId, name, description };
+    const first = await supabase
+      .from("collections")
+      .insert(payload)
+      .select("id")
+      .single();
+    if (!first.error) return (first.data as { id: string }).id;
+    if (!mentionsDescription(first.error)) return null;
+    const fallback = await supabase
       .from("collections")
       .insert({ user_id: userId, name })
       .select("id")
       .single();
-    if (error) return null;
-    return (data as { id: string }).id;
+    if (fallback.error) return null;
+    return (fallback.data as { id: string }).id;
   } catch {
     return null;
+  }
+}
+
+export async function renameCollectionRemote(
+  supabase: SupabaseClient,
+  collectionId: string,
+  name: string,
+  description = ""
+): Promise<boolean> {
+  try {
+    const first = await supabase
+      .from("collections")
+      .update({ name, description })
+      .eq("id", collectionId);
+    if (!first.error) return true;
+    if (!mentionsDescription(first.error)) return false;
+    const fallback = await supabase
+      .from("collections")
+      .update({ name })
+      .eq("id", collectionId);
+    return !fallback.error;
+  } catch {
+    return false;
   }
 }
 

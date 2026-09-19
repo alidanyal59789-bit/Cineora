@@ -17,6 +17,18 @@ export default function Loading() {
           <div className="h-64 animate-pulse rounded-2xl bg-white/[0.04]" />
           <div className="h-64 animate-pulse rounded-2xl bg-white/[0.04]" />
         </div>
+        <div className="mt-10">
+          <div className="h-6 w-36 animate-pulse rounded bg-white/10" />
+          <div className="mt-4 flex gap-4 overflow-hidden">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="w-28 shrink-0 sm:w-32">
+                <div className="aspect-[3/4] animate-pulse rounded-2xl bg-white/[0.04]" />
+                <div className="mt-2 h-3 animate-pulse rounded bg-white/10" />
+                <div className="mt-1.5 h-3 w-2/3 animate-pulse rounded bg-white/5" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
