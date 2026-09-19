@@ -3,6 +3,15 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from "react";
 import type { TMDBMovie } from "@/lib/tmdb";
+import { useUser } from "@/hooks/useUser";
+import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import {
+  fetchWatchlist,
+  upsertWatchlistItem,
+  deleteWatchlistItem,
+  clearWatchlistRemote,
+} from "@/lib/supabase/watchlist";
 
 const STORAGE_KEY = "cineora_watchlist";
 
@@ -46,12 +55,41 @@ function saveWatchlist(list: TMDBMovie[]) {
 export function useWatchlist() {
   const [watchlist, setWatchlist] = useState<TMDBMovie[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const { user } = useUser();
+  const userId = user?.id ?? null;
 
-  // Load on mount (client only)
+  // Load on mount (client only) - guest cache
   useEffect(() => {
     setWatchlist(loadWatchlist());
     setIsLoaded(true);
   }, []);
+
+  // Sync with Supabase when signed in: merge remote + local, push local-only up.
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const remote = await fetchWatchlist(supabase, userId);
+        if (cancelled || remote === null) return;
+        const local = loadWatchlist();
+        const merged = [...remote];
+        const missing = local.filter(
+          (m) => !merged.some((r) => r.id === m.id)
+        );
+        for (const m of missing) {
+          merged.push(m);
+          void upsertWatchlistItem(supabase, userId, m);
+        }
+        setWatchlist(merged);
+        saveWatchlist(merged);
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   // Listen for changes from other tabs or same-tab custom event
   useEffect(() => {
@@ -77,17 +115,30 @@ export function useWatchlist() {
         saveWatchlist(next);
         return next;
       });
+      if (userId && isSupabaseConfigured()) {
+        try {
+          void upsertWatchlistItem(createClient(), userId, movie);
+        } catch {}
+      }
     },
-    []
+    [userId]
   );
 
-  const removeFromWatchlist = useCallback((id: number) => {
-    setWatchlist((prev) => {
-      const next = prev.filter((m) => m.id !== id);
-      saveWatchlist(next);
-      return next;
-    });
-  }, []);
+  const removeFromWatchlist = useCallback(
+    (id: number) => {
+      setWatchlist((prev) => {
+        const next = prev.filter((m) => m.id !== id);
+        saveWatchlist(next);
+        return next;
+      });
+      if (userId && isSupabaseConfigured()) {
+        try {
+          void deleteWatchlistItem(createClient(), userId, id);
+        } catch {}
+      }
+    },
+    [userId]
+  );
 
   const toggleWatchlist = useCallback(
     (movie: TMDBMovie) => {
@@ -100,7 +151,12 @@ export function useWatchlist() {
   const clearWatchlist = useCallback(() => {
     setWatchlist([]);
     saveWatchlist([]);
-  }, []);
+    if (userId && isSupabaseConfigured()) {
+      try {
+        void clearWatchlistRemote(createClient(), userId);
+      } catch {}
+    }
+  }, [userId]);
 
   return {
     watchlist,

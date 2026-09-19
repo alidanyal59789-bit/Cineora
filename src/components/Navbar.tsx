@@ -3,8 +3,12 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import SearchInput from "@/components/SearchInput";
 import { useWatchlist } from "@/hooks/useWatchlist";
+import { useUser } from "@/hooks/useUser";
+import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const navLinks = [
   { label: "Discover", href: "/#discover" },
@@ -16,6 +20,23 @@ const navLinks = [
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { count } = useWatchlist();
+  const { user } = useUser();
+  const router = useRouter();
+
+  const avatarInitial =
+    user?.email?.charAt(0)?.toUpperCase() ??
+    user?.user_metadata?.name?.charAt(0)?.toUpperCase() ??
+    "A";
+
+  async function handleSignOut() {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {}
+    setMobileOpen(false);
+    router.refresh();
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#060610]/70 backdrop-blur-xl">
@@ -90,13 +111,25 @@ export default function Navbar() {
             )}
           </Link>
 
-          <button className="hidden h-9 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black transition hover:bg-white/90 sm:inline-flex">
-            Sign In
-          </button>
+          {user ? (
+            <button
+              onClick={handleSignOut}
+              className="hidden h-9 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black transition hover:bg-white/90 sm:inline-flex"
+            >
+              Sign Out
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              className="hidden h-9 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black transition hover:bg-white/90 sm:inline-flex"
+            >
+              Sign In
+            </Link>
+          )}
 
-          <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#ec4899] to-[#8b5cf6] p-[1.5px] sm:flex">
+          <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#ec4899] to-[#8b5cf6] p-[1.5px] sm:flex" title={user?.email ?? "Guest"}>
             <div className="flex h-full w-full items-center justify-center rounded-full bg-[#1a1a2e] text-xs font-bold text-white">
-              A
+              {avatarInitial}
             </div>
           </div>
 
@@ -141,9 +174,22 @@ export default function Navbar() {
                 <SearchInput className="w-full" placeholder="Search movies..." onSubmitted={() => setMobileOpen(false)} />
               </div>
             </div>
-            <button className="mt-3 flex h-11 items-center justify-center rounded-full bg-white text-sm font-semibold text-black">
-              Sign In
-            </button>
+            {user ? (
+              <button
+                onClick={handleSignOut}
+                className="mt-3 flex h-11 items-center justify-center rounded-full bg-white text-sm font-semibold text-black"
+              >
+                Sign Out{user.email ? ` (${user.email})` : ""}
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMobileOpen(false)}
+                className="mt-3 flex h-11 items-center justify-center rounded-full bg-white text-sm font-semibold text-black"
+              >
+                Sign In
+              </Link>
+            )}
           </nav>
         </div>
       )}
