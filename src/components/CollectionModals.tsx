@@ -26,17 +26,17 @@ export function ModalShell({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-y-auto p-3 sm:items-center sm:p-4">
       <button
         aria-label="Close dialog"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-sm"
+        className="fixed inset-0 cursor-default bg-black/70 backdrop-blur-sm"
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className="relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-[24px] border border-white/10 bg-[#0c0c1a] p-6 shadow-2xl shadow-black/60"
+        className="relative my-auto max-h-[92dvh] w-[min(100%,28rem)] overflow-y-auto overscroll-contain rounded-[24px] border border-white/10 bg-[#0c0c1a] p-5 shadow-2xl shadow-black/60 sm:p-6"
       >
         {children}
       </div>
@@ -66,7 +66,7 @@ function SignInPrompt({ action }: { action: string }) {
 }
 
 const inputClass =
-  "h-11 w-full rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none disabled:opacity-50";
+  "min-h-[44px] h-11 w-full rounded-full border border-white/10 bg-white/[0.06] px-5 text-base text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none disabled:opacity-50 sm:text-sm";
 
 // Create / rename form. Name required, description optional.
 export function CollectionFormModal({
@@ -84,7 +84,7 @@ export function CollectionFormModal({
   onClose: () => void;
   onSubmit: (name: string, description: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
-  const { user } = useUser();
+  const { user, isLoading: userLoading } = useUser();
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [saving, setSaving] = useState(false);
@@ -92,8 +92,24 @@ export function CollectionFormModal({
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    nameRef.current?.focus();
+    nameRef.current?.focus({ preventScroll: true });
   }, []);
+
+  // While the session is still loading (slow mobile networks), don't flash
+  // a sign-in wall - show a skeleton so a signed-in user never sees a
+  // misleading prompt.
+  if (userLoading) {
+    return (
+      <ModalShell label={mode === "create" ? "Create collection" : "Rename collection"} onClose={onClose}>
+        <div className="h-11 animate-pulse rounded-full bg-white/[0.06]" />
+        <div className="mt-3 h-11 animate-pulse rounded-full bg-white/[0.04]" />
+        <div className="mt-4 flex gap-2">
+          <div className="h-11 flex-1 animate-pulse rounded-full bg-white/[0.04]" />
+          <div className="h-11 flex-1 animate-pulse rounded-full bg-white/[0.04]" />
+        </div>
+      </ModalShell>
+    );
+  }
 
   if (!user) {
     return (
@@ -141,6 +157,8 @@ export function CollectionFormModal({
           placeholder="Collection name (required)"
           maxLength={60}
           disabled={saving}
+          autoComplete="off"
+          enterKeyHint="next"
           className={inputClass}
         />
         <label className="sr-only" htmlFor="collection-description">Description (optional)</label>
@@ -151,6 +169,8 @@ export function CollectionFormModal({
           placeholder="Description (optional)"
           maxLength={140}
           disabled={saving}
+          autoComplete="off"
+          enterKeyHint="done"
           className={inputClass}
         />
         {error && (
@@ -226,7 +246,7 @@ export function AddToCollectionModal({
   onClose: () => void;
   onCreateNew: () => void;
 }) {
-  const { user } = useUser();
+  const { user, isLoading: userLoading } = useUser();
   const { collections, isLoaded, addToCollection, isInCollection } = useCollections();
   const [addingId, setAddingId] = useState<string | null>(null);
 
@@ -248,11 +268,11 @@ export function AddToCollectionModal({
         {movie.title}
       </p>
 
-      {!user ? (
+      {!user && !userLoading ? (
         <div className="mt-4">
           <SignInPrompt action="to save movies to collections" />
         </div>
-      ) : !isLoaded ? (
+      ) : !isLoaded || userLoading ? (
         <div className="mt-4 h-24 animate-pulse rounded-xl bg-white/[0.04]" />
       ) : collections.length === 0 ? (
         <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center">

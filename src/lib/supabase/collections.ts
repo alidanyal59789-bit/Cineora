@@ -38,6 +38,46 @@ function toCollection(row: CollectionRow, movies: TMDBMovie[]): UserCollection {
   };
 }
 
+// Classified, PII-free diagnostic for a failed remote write. Never includes
+// tokens, emails, or full payloads - only the PostgREST code/message/hint.
+export type CollectionRemoteError = {
+  code: string;
+  message: string;
+  hint: string | null;
+};
+
+function toRemoteError(error: unknown): CollectionRemoteError {
+  const e = error as { code?: unknown; message?: unknown; hint?: unknown } | null;
+  const code =
+    typeof e?.code === "string" && e.code.length > 0 ? e.code : "unknown";
+  const rawMessage =
+    typeof e?.message === "string" && e.message.length > 0
+      ? e.message
+      : "Unknown database error.";
+  const hint =
+    typeof e?.hint === "string" && e.hint.length > 0 ? e.hint : null;
+  return { code, message: rawMessage.slice(0, 300), hint };
+}
+
+function devLog(action: string, error: CollectionRemoteError) {
+  // Development-only diagnostic. Safe: code/message/hint from PostgREST
+  // contain no secrets; never log user ids, emails, or tokens here.
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(
+      `[Collections] ${action} failed (code=${error.code}): ${error.message}`
+    );
+  }
+}
+
+function isRlsDenial(error: CollectionRemoteError): boolean {
+  return (
+    error.code === "42501" ||
+    error.message.toLowerCase().includes("row-level security") ||
+    error.message.toLowerCase().includes("violates") ||
+    error.message.toLowerCase().includes("policy")
+  );
+}
+
 export async function fetchCollections(
   supabase: SupabaseClient,
   userId: string
@@ -93,26 +133,69 @@ export async function createCollectionRemote(
   name: string,
   description = ""
 ): Promise<string | null> {
+  const res = await createCollectionRemoteDetailed(supabase, userId, name, description);
+  return res.id;
+}
+
+/**
+ * Remote-first create with diagnostics. Verifies the *live* Supabase session
+ * (not a possibly stale cached user id) before inserting, so an expired
+ * mobile session surfaces as `not_authenticated` instead of a silent RLS
+ * denial. The insert uses the live session's user id, guaranteeing
+ * `auth.uid() = user_id` for the `collections_owner` RLS policy.
+ */
+export async function createCollectionRemoteDetailed(
+  supabase: SupabaseClient,
+  userId: string,
+  name: string,
+  description = ""
+): Promise<{ id: string | null; error?: CollectionRemoteError }> {
   try {
-    const payload = { user_id: userId, name, description };
+    // Live session check - the cached hook user id may be stale (e.g. mobile
+    // tab backgrounded, token expired). RLS needs a valid session.
+    const { data: sessionData } = await supabase.auth.getUser();
+    const liveUserId = sessionData?.user?.id ?? null;
+    if (!liveUserId) {
+      const err: CollectionRemoteError = {
+        code: "not_authenticated",
+        message: "No active session.",
+        hint: null,
+      };
+      devLog("create", err);
+      return { id: null, error: err };
+    }
+    const ownerId = liveUserId === userId ? userId : liveUserId;
+    const payload = { user_id: ownerId, name, description };
     const first = await supabase
       .from("collections")
       .insert(payload)
       .select("id")
       .single();
-    if (!first.error) return (first.data as { id: string }).id;
-    if (!mentionsDescription(first.error)) return null;
+    if (!first.error) return { id: (first.data as { id: string }).id };
+    if (!mentionsDescription(first.error)) {
+      const err = toRemoteError(first.error);
+      devLog("create", err);
+      return { id: null, error: err };
+    }
     const fallback = await supabase
       .from("collections")
-      .insert({ user_id: userId, name })
+      .insert({ user_id: ownerId, name })
       .select("id")
       .single();
-    if (fallback.error) return null;
-    return (fallback.data as { id: string }).id;
-  } catch {
-    return null;
+    if (fallback.error) {
+      const err = toRemoteError(fallback.error);
+      devLog("create", err);
+      return { id: null, error: err };
+    }
+    return { id: (fallback.data as { id: string }).id };
+  } catch (e) {
+    const err = toRemoteError(e);
+    devLog("create", err);
+    return { id: null, error: err };
   }
 }
+
+export { isRlsDenial };
 
 export async function renameCollectionRemote(
   supabase: SupabaseClient,

@@ -7,7 +7,7 @@ import MoodMovieGrid from "@/components/MoodMovieGrid";
 import DetailsTrailer from "@/components/DetailsTrailer";
 import WatchProviders from "@/components/WatchProviders";
 import CastCrew from "@/components/CastCrew";
-import AddToCollectionButton from "@/components/AddToCollectionButton";
+import MovieDetailsActions from "@/components/MovieDetailsActions";
 import { getMovieDetails, getRecommendedMovies, getGenreMap, posterUrl, backdropUrl, getMovieVideos, findTrailer, getWatchProviders, getMovieCredits } from "@/lib/tmdb";
 
 export const revalidate = 3600;
@@ -155,6 +155,19 @@ export default async function MovieDetails({ params }: { params: Params }) {
   const backdrop = backdropUrl(details.backdrop_path, "w1280");
   const poster = posterUrl(details.poster_path, "w500");
 
+  // Lightweight TMDBMovie for client action buttons (watchlist/collections).
+  // Details carries `genres`; cards/hooks expect `genre_ids`.
+  const actionMovie = {
+    id: details.id,
+    title: details.title,
+    overview: details.overview,
+    poster_path: details.poster_path,
+    backdrop_path: details.backdrop_path,
+    vote_average: details.vote_average,
+    release_date: details.release_date,
+    genre_ids: details.genres.map((g) => g.id),
+  };
+
   return (
     <div className="min-h-screen bg-[#060610] text-white">
       <Navbar />
@@ -195,15 +208,15 @@ export default async function MovieDetails({ params }: { params: Params }) {
                   ))}
                 </div>
                 <p className="mt-6 max-w-[60ch] text-sm leading-6 text-white/70">{details.overview || "No overview available."}</p>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <a href="#recommendations" className="rounded-full bg-gradient-to-r from-[#ec4899] to-[#8b5cf6] px-6 py-2.5 text-sm font-semibold text-white">
+                <div className="mt-6 flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  <a href="#recommendations" className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-gradient-to-r from-[#ec4899] to-[#8b5cf6] px-6 py-2.5 text-sm font-semibold text-white">
                     Show recommendations
                   </a>
-                  <AddToCollectionButton movie={details} variant="details" />
-                  <Link href={`/?rec=${details.id}#recommended`} className="rounded-full border border-white/15 bg-white/[0.06] px-6 py-2.5 text-sm font-semibold text-white">
+                  <MovieDetailsActions movie={actionMovie} />
+                  <Link href={`/?rec=${details.id}#recommended`} className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/15 bg-white/[0.06] px-6 py-2.5 text-sm font-semibold text-white">
                     Show on homepage
                   </Link>
-                  <Link href="/" className="rounded-full border border-white/15 bg-white/[0.06] px-6 py-2.5 text-sm font-semibold text-white">
+                  <Link href="/" className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/15 bg-white/[0.06] px-6 py-2.5 text-sm font-semibold text-white">
                     Home
                   </Link>
                 </div>

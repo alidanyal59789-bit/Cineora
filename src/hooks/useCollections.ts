@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { TMDBMovie } from "@/lib/tmdb";
 import { useUser } from "@/hooks/useUser";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +9,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   fetchCollections,
   createCollectionRemote,
+  createCollectionRemoteDetailed,
+  isRlsDenial,
   renameCollectionRemote,
   deleteCollectionRemote,
   addToCollectionRemote,
@@ -162,6 +164,10 @@ export function useCollections() {
   );
 
   // Remote-first create with real success/error feedback for signed-in UI.
+  // Uses the live Supabase session (not a stale cached id) so an expired
+  // mobile session yields a "sign in again" message instead of a silent RLS
+  // denial. Guards against concurrent double submissions.
+  const createInFlight = useRef(false);
   const createCollectionAsync = useCallback(
     async (
       name: string,
@@ -169,13 +175,46 @@ export function useCollections() {
     ): Promise<{ ok: boolean; error?: string; id?: string }> => {
       const trimmed = name.trim();
       if (!trimmed) return { ok: false, error: "Please enter a collection name." };
+      if (trimmed.length > 60) {
+        return { ok: false, error: "Collection name must be 60 characters or fewer." };
+      }
       if (!userId || !isSupabaseConfigured()) {
         return { ok: false, error: "Please sign in to create collections." };
       }
+      if (createInFlight.current) {
+        return { ok: false, error: "Already creating — please wait a moment." };
+      }
+      createInFlight.current = true;
       try {
         const supabase = createClient();
-        const remoteId = await createCollectionRemote(supabase, userId, trimmed, description.trim());
-        if (!remoteId) return { ok: false, error: "Could not save the collection. Please try again." };
+        const { id: remoteId, error: remoteError } =
+          await createCollectionRemoteDetailed(
+            supabase,
+            userId,
+            trimmed,
+            description.trim().slice(0, 140)
+          );
+        if (!remoteId) {
+          if (remoteError?.code === "not_authenticated") {
+            return { ok: false, error: "Your session expired. Please sign in again." };
+          }
+          if (remoteError && isRlsDenial(remoteError)) {
+            return { ok: false, error: "Couldn't save — please sign in again and retry." };
+          }
+          if (
+            remoteError &&
+            (remoteError.message.toLowerCase().includes("fetch failed") ||
+              remoteError.message.toLowerCase().includes("network") ||
+              remoteError.message.toLowerCase().includes("timeout"))
+          ) {
+            return { ok: false, error: "Network issue. Check your connection and try again." };
+          }
+          if (process.env.NODE_ENV !== "production" && remoteError) {
+            // Dev-only diagnostic: PII-free code, never secrets or tokens.
+            console.warn(`[Collections] create failed (code=${remoteError.code})`);
+          }
+          return { ok: false, error: "Could not save the collection. Please try again." };
+        }
         const refreshed = await fetchCollections(supabase, userId);
         if (refreshed !== null) {
           setCollections(refreshed);
@@ -184,6 +223,8 @@ export function useCollections() {
         return { ok: true, id: remoteId };
       } catch {
         return { ok: false, error: "Could not save the collection. Please try again." };
+      } finally {
+        createInFlight.current = false;
       }
     },
     [userId]

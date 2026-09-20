@@ -28,7 +28,7 @@ export default function AddToCollectionButton({
       <>
         <button
           onClick={openPicker}
-          className="rounded-full border border-white/15 bg-white/[0.06] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+          className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/15 bg-white/[0.06] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
         >
           + Collection
         </button>
